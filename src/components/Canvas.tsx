@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
+import {lab} from 'd3-color'
 
 const Painting = styled.canvas`
   img {
@@ -7,6 +8,7 @@ const Painting = styled.canvas`
     top: 0;
     left: 0;
   }
+  background-color: black;
 `
 
 const Container = styled.div`
@@ -70,11 +72,30 @@ const Canvas: React.FC = () => {
 
   const addLegoPiece = (color: string, x: number, y: number, blockSize: number) => {
     const context = paintingEl?.current?.getContext('2d')
+    const labColor = lab(color)
+    labColor.l = labColor.l + 20
     if (context != null && paintingEl?.current) {
+      context.translate(x + blockSize/2, y + blockSize/2)
+      context.rotate(Math.random() / 10 - 0.05)
+      context.translate(-x - blockSize/2, -y - blockSize/2)
       context.beginPath()
-      context.fillStyle = color
+      context.fillStyle =  labColor.brighter(-0.15).formatHex()
       context.rect(x, y, blockSize, blockSize)
       context.fill()
+      context.closePath()
+      context.resetTransform()
+
+      context.beginPath()
+      context.fillStyle = labColor.brighter(-0.3).formatHex()
+      context.arc(x+blockSize/2 + 2, y+blockSize/2 + 2, blockSize*0.57/2, 0, 2*Math.PI)
+      context.fill()
+      context.closePath()
+
+      context.beginPath()
+      context.fillStyle = labColor.brighter(0.15).formatHex()
+      context.arc(x+blockSize/2, y+blockSize/2, blockSize*0.57/2, 0, 2*Math.PI)
+      context.fill()
+      context.closePath()
     }
   }
 
@@ -89,10 +110,8 @@ const Canvas: React.FC = () => {
           const posX = x * blockSize
           const posY = y * blockSize
           // Paint!
-          console.log('draw')
           addLegoPiece(getSampleColor(posX, posY), posX, posY, blockSize)
           // await delay(1)
-
         }
       }
     }

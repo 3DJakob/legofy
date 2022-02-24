@@ -43,6 +43,7 @@
     ]
   },
   "devDependencies": {
+    "@types/d3-color": "^3.0.2",
     "@types/styled-components": "^5.1.22"
   }
 }
