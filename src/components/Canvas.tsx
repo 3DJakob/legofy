@@ -73,7 +73,9 @@ const Canvas: React.FC = () => {
   const addLegoPiece = (color: string, x: number, y: number, blockSize: number) => {
     const context = paintingEl?.current?.getContext('2d')
     const labColor = lab(color)
-    labColor.l = labColor.l + 20
+
+    // TODO find closest actuall LEGO color
+
     if (context != null && paintingEl?.current) {
       context.translate(x + blockSize/2, y + blockSize/2)
       context.rotate(Math.random() / 10 - 0.05)
