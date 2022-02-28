@@ -32,6 +32,7 @@ const Canvas: React.FC = () => {
   const [loaded, setLoaded] = useState(false)
   const [numberOfLego, setNumberOfLego] = useState(40)
   const [legoColors, setLegoColors] = useState<LabColor[]>()
+  const [imgURL, setImgURL] = useState('http://localhost:3000/skyrim.jpeg')
 
   const [h, setH] = useState(1)
   const [w, setW] = useState(1)
@@ -63,9 +64,17 @@ const Canvas: React.FC = () => {
     setLegoColors(res)
   }
 
+  const onImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      let img = e.target.files[0];
+      setImgURL(URL.createObjectURL(img))      
+    }
+  }
+
   useEffect(() => {
-    const image = new Image();
-    image.src = "http://localhost:3000/skyrim.jpeg";
+    setLoaded(false)
+    const image = new Image()
+    image.src = imgURL
     image.onload = () => {
       const context = inputEl?.current?.getContext('2d');
       if (context != null && inputEl?.current) {
@@ -79,7 +88,7 @@ const Canvas: React.FC = () => {
       }
     }
     loadColors().then(() => setLoaded(true))
-  }, [])
+  }, [imgURL])
 
   const delay = async (ms = 1000) =>
     new Promise(resolve => setTimeout(resolve, ms))
@@ -93,7 +102,6 @@ const Canvas: React.FC = () => {
   }
 
   const getSampleColor = (x: number, y: number): string => {
-    // TODO calculate LEGO piece color
     const color = getColor(x, y)
     if (color != undefined) {
       return 'rgb(' + color[0] + ', ' + color[1] + ', ' + color[2] + ')'
@@ -179,6 +187,7 @@ const Canvas: React.FC = () => {
       <input type="range" value={numberOfLego} onChange={e => setNumberOfLego(e?.target?.value ? Number(e.target.value) : 0)}
         min="2" max="200" />
       <label >Number of LEGO pieces {numberOfLego}</label>
+      <input type="file" name="myImage" onChange={(e) => onImageChange(e)} />
     </Container>
   )
 }
