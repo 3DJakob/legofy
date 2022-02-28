@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
-import {lab} from 'd3-color'
+import { lab, LabColor } from 'd3-color'
+// @ts-expect-error
+import { differenceEuclideanLab } from 'd3-color-difference'
+// @ts-expect-error
+import colors from '../colors.csv'
+import * as d3 from 'd3'
 
 const Painting = styled.canvas`
   img {
@@ -26,14 +31,41 @@ const Canvas: React.FC = () => {
   const paintingEl = useRef<HTMLCanvasElement>(null)
   const [loaded, setLoaded] = useState(false)
   const [numberOfLego, setNumberOfLego] = useState(40)
-  const [legoImg, setLegoImg] = useState<[string[]]>()
+  const [legoColors, setLegoColors] = useState<LabColor[]>()
 
   const [h, setH] = useState(1)
   const [w, setW] = useState(1)
 
+  const findColor = (a: LabColor): LabColor | null => {
+    if (legoColors != undefined) {
+      let smallestDist = differenceEuclideanLab(a, legoColors[0])
+      let smallestIndex = 0
+      for (let i = 1; i < legoColors.length; i++) {
+        const dist = differenceEuclideanLab(a, legoColors[i])
+        if (dist < smallestDist) {
+          smallestDist = dist
+          smallestIndex = i
+        }
+      }
+      return legoColors[smallestIndex]
+    }
+    return null
+  }
+
+  const loadColors = async () => {
+    const res: LabColor[] = []
+    // @ts-expect-error
+    await d3.csv(colors, function (data: any) {
+      if (data.is_trans === 'f') {
+        res.push(lab('#' + data.rgb))
+      }
+    })
+    setLegoColors(res)
+  }
+
   useEffect(() => {
     const image = new Image();
-    image.src = "http://localhost:3001/skyrim.jpeg";
+    image.src = "http://localhost:3000/skyrim.jpeg";
     image.onload = () => {
       const context = inputEl?.current?.getContext('2d');
       if (context != null && inputEl?.current) {
@@ -44,9 +76,9 @@ const Canvas: React.FC = () => {
         const ratio = window.devicePixelRatio
         context.scale(ratio, ratio)
         context.drawImage(image, 0, 0, inputEl?.current?.width ? inputEl?.current?.width / ratio : 0, inputEl?.current?.height ? inputEl?.current?.height / ratio : 0)
-        setLoaded(true)
       }
     }
+    loadColors().then(() => setLoaded(true))
   }, [])
 
   const delay = async (ms = 1000) =>
@@ -73,31 +105,32 @@ const Canvas: React.FC = () => {
   const addLegoPiece = (color: string, x: number, y: number, blockSize: number) => {
     const context = paintingEl?.current?.getContext('2d')
     const labColor = lab(color)
+    const closestLabColor = findColor(labColor)
 
-    // TODO find closest actuall LEGO color
+    if (closestLabColor != null) {
+      if (context != null && paintingEl?.current) {
+        context.translate(x + blockSize / 2, y + blockSize / 2)
+        context.rotate(Math.random() / 10 - 0.05)
+        context.translate(-x - blockSize / 2, -y - blockSize / 2)
+        context.beginPath()
+        context.fillStyle = closestLabColor.brighter(-0.15).formatHex()
+        context.rect(x, y, blockSize, blockSize)
+        context.fill()
+        context.closePath()
+        context.resetTransform()
 
-    if (context != null && paintingEl?.current) {
-      context.translate(x + blockSize/2, y + blockSize/2)
-      context.rotate(Math.random() / 10 - 0.05)
-      context.translate(-x - blockSize/2, -y - blockSize/2)
-      context.beginPath()
-      context.fillStyle =  labColor.brighter(-0.15).formatHex()
-      context.rect(x, y, blockSize, blockSize)
-      context.fill()
-      context.closePath()
-      context.resetTransform()
+        context.beginPath()
+        context.fillStyle = closestLabColor.brighter(-0.3).formatHex()
+        context.arc(x + blockSize / 2 + 2, y + blockSize / 2 + 2, blockSize * 0.57 / 2, 0, 2 * Math.PI)
+        context.fill()
+        context.closePath()
 
-      context.beginPath()
-      context.fillStyle = labColor.brighter(-0.3).formatHex()
-      context.arc(x+blockSize/2 + 2, y+blockSize/2 + 2, blockSize*0.57/2, 0, 2*Math.PI)
-      context.fill()
-      context.closePath()
-
-      context.beginPath()
-      context.fillStyle = labColor.brighter(0.15).formatHex()
-      context.arc(x+blockSize/2, y+blockSize/2, blockSize*0.57/2, 0, 2*Math.PI)
-      context.fill()
-      context.closePath()
+        context.beginPath()
+        context.fillStyle = closestLabColor.brighter(0.15).formatHex()
+        context.arc(x + blockSize / 2, y + blockSize / 2, blockSize * 0.57 / 2, 0, 2 * Math.PI)
+        context.fill()
+        context.closePath()
+      }
     }
   }
 
