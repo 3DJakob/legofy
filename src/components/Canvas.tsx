@@ -1,11 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
 import { lab, LabColor } from 'd3-color'
-// @ts-expect-error
-import { differenceEuclideanLab } from 'd3-color-difference'
-// @ts-expect-error
-import colors from '../colors.csv'
-import * as d3 from 'd3'
+import { initiateVideo } from '../utils/video'
 
 const Painting = styled.canvas`
   img {
@@ -26,68 +22,50 @@ const PaintingsContainer = styled.div`
   flex-direction: row;
 `
 
+let usingWebcamGlobal = false
+
 const Canvas: React.FC = () => {
   const inputEl = useRef<HTMLCanvasElement>(null)
   const paintingEl = useRef<HTMLCanvasElement>(null)
-  const [loaded, setLoaded] = useState(false)
-  const [numberOfLego, setNumberOfLego] = useState(40)
-  const [legoColors, setLegoColors] = useState<LabColor[]>()
-  const [imgURL, setImgURL] = useState('http://localhost:3000/skyrim.jpeg')
+  const [numberOfLego, setNumberOfLego] = useState(37)
+  const [imgURL, setImgURL] = useState(window.location.href + '/skyrim.jpeg')
+  const [usingWebcam, setUsingWebCam] = useState(false)
+  const worker: Worker = new Worker('./worker.js')
 
   const [h, setH] = useState(1)
   const [w, setW] = useState(1)
-
-  const findColor = (a: LabColor): LabColor | null => {
-    if (legoColors != undefined) {
-      let smallestDist = differenceEuclideanLab(a, legoColors[0])
-      let smallestIndex = 0
-      for (let i = 1; i < legoColors.length; i++) {
-        const dist = differenceEuclideanLab(a, legoColors[i])
-        if (dist < smallestDist) {
-          smallestDist = dist
-          smallestIndex = i
-        }
-      }
-      return legoColors[smallestIndex]
-    }
-    return null
-  }
-
-  const loadColors = async () => {
-    const res: LabColor[] = []
-    // @ts-expect-error
-    await d3.csv(colors, function (data: any) {
-      if (data.is_trans === 'f') {
-        res.push(lab('#' + data.rgb))
-      }
-    })
-    setLegoColors(res)
-  }
+  const blockSize = Math.round((w) / numberOfLego)
 
   const onImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       let img = e.target.files[0];
-      setImgURL(URL.createObjectURL(img))      
+      setImgURL(URL.createObjectURL(img))
     }
   }
 
-  useEffect(() => {
-    setLoaded(false)
-    const image = new Image()
-    image.src = imgURL
-    image.onload = () => {
-      const context = inputEl?.current?.getContext('2d');
-      if (context != null && inputEl?.current) {
-        const w = window.innerWidth / 2
-        const h = (window.innerWidth / 2) / (image.width / image.height)
-        setH(h)
-        setW(w)
-        const ratio = window.devicePixelRatio
-        context.scale(ratio, ratio)
-        context.drawImage(image, 0, 0, inputEl?.current?.width ? inputEl?.current?.width / ratio : 0, inputEl?.current?.height ? inputEl?.current?.height / ratio : 0)
+  const drawImage = async () => {
+    return new Promise((resolve, reject) => {
+      const image = new Image()
+      image.src = imgURL
+      image.onload = () => {
+        const context = inputEl?.current?.getContext('2d');
+        if (context != null && inputEl?.current) {
+          const w = window.innerWidth / 2
+          const h = (window.innerWidth / 2) / (image.width / image.height)
+          setH(h)
+          setW(w)
+          // const ratio = window.devicePixelRatio
+          // context.scale(ratio, ratio)
+          const ratio = 1
+          context.drawImage(image, 0, 0, inputEl?.current?.width ? inputEl?.current?.width / ratio : 0, inputEl?.current?.height ? inputEl?.current?.height / ratio : 0)
+          resolve(1)
+        }
       }
-    }
-    loadColors().then(() => setLoaded(true))
+    })
+  }
+
+  useEffect(() => {
+    drawImage()
   }, [imgURL])
 
   const delay = async (ms = 1000) =>
@@ -110,31 +88,48 @@ const Canvas: React.FC = () => {
     return '#fff'
   }
 
-  const addLegoPiece = (color: string, x: number, y: number, blockSize: number) => {
-    const context = paintingEl?.current?.getContext('2d')
-    const labColor = lab(color)
-    const closestLabColor = findColor(labColor)
+  useEffect(() => {
+    worker.onmessage = ($event: MessageEvent) => {
+      if ($event && $event.data) {
+        const resColor = $event.data.color
+        addLegoPiece(lab(resColor.l, resColor.a, resColor.b), $event.data.posX, $event.data.posY)
+      }
+    }
+  }, [worker])
 
-    if (closestLabColor != null) {
+  useEffect(() => {
+    const context = inputEl?.current?.getContext('2d')
+    if (context != null) {
+      const ratio = window.devicePixelRatio
+      context.scale(ratio, ratio)
+    }
+  }, [])
+
+  // console.log(JSON.stringify(legoColors?.map(c => {return  {l: Math.round(c.l), a: Math.round(c.a), b: Math.round(c.b)}})))
+
+  const addLegoPiece = (color: LabColor, x: number, y: number) => {
+    const context = paintingEl?.current?.getContext('2d')
+
+    if (color != null) {
       if (context != null && paintingEl?.current) {
         context.translate(x + blockSize / 2, y + blockSize / 2)
         context.rotate(Math.random() / 10 - 0.05)
         context.translate(-x - blockSize / 2, -y - blockSize / 2)
         context.beginPath()
-        context.fillStyle = closestLabColor.brighter(-0.15).formatHex()
+        context.fillStyle = color.brighter(-0.15).formatHex()
         context.rect(x, y, blockSize, blockSize)
         context.fill()
         context.closePath()
         context.resetTransform()
 
         context.beginPath()
-        context.fillStyle = closestLabColor.brighter(-0.3).formatHex()
+        context.fillStyle = color.brighter(-0.3).formatHex()
         context.arc(x + blockSize / 2 + 2, y + blockSize / 2 + 2, blockSize * 0.57 / 2, 0, 2 * Math.PI)
         context.fill()
         context.closePath()
 
         context.beginPath()
-        context.fillStyle = closestLabColor.brighter(0.15).formatHex()
+        context.fillStyle = color.brighter(0.15).formatHex()
         context.arc(x + blockSize / 2, y + blockSize / 2, blockSize * 0.57 / 2, 0, 2 * Math.PI)
         context.fill()
         context.closePath()
@@ -142,7 +137,7 @@ const Canvas: React.FC = () => {
     }
   }
 
-  const generateLegos = async (): Promise<void> => {
+  const generateLegos = () => {
     const canvasElement = inputEl?.current
     if (canvasElement != null) {
       const blockSize = Math.round((w) / numberOfLego)
@@ -153,8 +148,7 @@ const Canvas: React.FC = () => {
           const posX = x * blockSize
           const posY = y * blockSize
           // Paint!
-          addLegoPiece(getSampleColor(posX, posY), posX, posY, blockSize)
-          // await delay(1)
+          worker.postMessage({ color: lab(getSampleColor(posX, posY)), posX, posY, });
         }
       }
     }
@@ -168,16 +162,81 @@ const Canvas: React.FC = () => {
   }
 
   useEffect(() => {
-    if (loaded && w > 1 && h > 1) {
-      clearCanvas()
-      generateLegos()
+    if (w > 1 && h > 1 && usingWebcamGlobal === false) {
+      drawImage().then(() => {
+        clearCanvas()
+        generateLegos()
+      })
     }
-  }, [loaded, w, h, numberOfLego])
+  }, [w, h, numberOfLego])
+
+  const loopGenerate = async () => {
+    while (usingWebcamGlobal) {
+      generateLegos()
+      // TODO wait untill all workers are done then loop
+      await delay(10)
+      // clearCanvas()
+    }
+  }
+
+  const InitiateWebcam = async () => {
+    const w = window.innerWidth / 2
+    const h = (window.innerWidth / 2) / (4 / 3)
+    setH(h)
+    setW(w)
+    console.log(h, w)
+    const video = await initiateVideo(inputEl)
+
+    const context = inputEl?.current?.getContext('2d');
+    const canvas = inputEl?.current
+
+
+    let crop: {
+      x: number,
+      y: number,
+      w: number,
+      h: number
+    }
+
+    video.onplaying = function () {
+      if (canvas) {
+        var croppedWidth = (Math.min(video.videoHeight, canvas.height) / Math.max(video.videoHeight, canvas.height)) * Math.min(video.videoWidth, canvas.width),
+          croppedX = (video.videoWidth - croppedWidth) / 2;
+        crop = { w: croppedWidth, h: video.videoHeight, x: croppedX, y: 0 };
+        // call our loop only when the video is playing
+        requestAnimationFrame(loop);
+      }
+    }
+    video.play()
+
+
+    function loop() {
+      if (context && canvas && usingWebcamGlobal) {
+        context.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, canvas.width, canvas.height);
+        if (usingWebcamGlobal) {
+          requestAnimationFrame(loop)
+        }
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (usingWebcam) {
+      InitiateWebcam()
+    } else {
+      drawImage().then(() => {
+        if (w > 1 && h > 1) {
+          clearCanvas()
+          generateLegos()
+        }
+      })
+    }
+    loopGenerate()
+  }, [usingWebcam])
 
   return (
     <Container>
       <PaintingsContainer>
-        {/* <img src={img} width={200} style={{ marginLeft: 20 }}></img> */}
         <Painting ref={inputEl} width={w} height={h}>
         </Painting>
         <Painting ref={paintingEl} width={w} height={h} >
@@ -188,6 +247,10 @@ const Canvas: React.FC = () => {
         min="2" max="200" />
       <label >Number of LEGO pieces {numberOfLego}</label>
       <input type="file" name="myImage" onChange={(e) => onImageChange(e)} />
+      <input type='checkbox' onChange={(e) => {
+        setUsingWebCam(!usingWebcam)
+        usingWebcamGlobal = !usingWebcam
+      }}></input>
     </Container>
   )
 }
