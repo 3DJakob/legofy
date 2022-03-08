@@ -1,7 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
 import { lab, LabColor } from 'd3-color'
 import { initiateVideo } from '../utils/video'
+import Title from './Title'
+// @ts-expect-error
+import Switch from 'react-ios-switch'
+import { useDropzone } from 'react-dropzone'
+
 
 const Painting = styled.canvas`
   img {
@@ -22,13 +27,31 @@ const PaintingsContainer = styled.div`
   flex-direction: row;
 `
 
+const Controls = styled.div`
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+`
+
+const DropContainer = styled.div`
+  padding: 20px;
+  background-color: #ccc;
+  margin: 20px 0;
+`
+
+const Row = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+`
+
 let usingWebcamGlobal = false
 
 const Canvas: React.FC = () => {
   const inputEl = useRef<HTMLCanvasElement>(null)
   const paintingEl = useRef<HTMLCanvasElement>(null)
   const [numberOfLego, setNumberOfLego] = useState(37)
-  const [imgURL, setImgURL] = useState(window.location.href + '/skyrim.jpeg')
+  const [imgURL, setImgURL] = useState(window.location.href + '/sample.jpg')
   const [usingWebcam, setUsingWebCam] = useState(false)
   const worker: Worker = new Worker('./worker.js')
 
@@ -181,7 +204,7 @@ const Canvas: React.FC = () => {
 
   const InitiateWebcam = async () => {
     const w = window.innerWidth / 2
-    const h = (window.innerWidth / 2) / (4 / 3)
+    const h = (window.innerWidth / 2) / (16 / 9)
     setH(h)
     setW(w)
     console.log(h, w)
@@ -200,9 +223,7 @@ const Canvas: React.FC = () => {
 
     video.onplaying = function () {
       if (canvas) {
-        var croppedWidth = (Math.min(video.videoHeight, canvas.height) / Math.max(video.videoHeight, canvas.height)) * Math.min(video.videoWidth, canvas.width),
-          croppedX = (video.videoWidth - croppedWidth) / 2;
-        crop = { w: croppedWidth, h: video.videoHeight, x: croppedX, y: 0 };
+        crop = { w: video.videoWidth, h: video.videoHeight, x: 0, y: 0 };
         // call our loop only when the video is playing
         requestAnimationFrame(loop);
       }
@@ -234,6 +255,11 @@ const Canvas: React.FC = () => {
     loopGenerate()
   }, [usingWebcam])
 
+  const onDrop = useCallback(acceptedFiles => {
+    setImgURL(URL.createObjectURL(acceptedFiles[0]))
+  }, [])
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop })
+
   return (
     <Container>
       <PaintingsContainer>
@@ -243,14 +269,33 @@ const Canvas: React.FC = () => {
         </Painting>
       </PaintingsContainer>
 
-      <input type="range" value={numberOfLego} onChange={e => setNumberOfLego(e?.target?.value ? Number(e.target.value) : 0)}
-        min="2" max="200" />
-      <label >Number of LEGO pieces {numberOfLego}</label>
-      <input type="file" name="myImage" onChange={(e) => onImageChange(e)} />
-      <input type='checkbox' onChange={(e) => {
-        setUsingWebCam(!usingWebcam)
-        usingWebcamGlobal = !usingWebcam
-      }}></input>
+      <Controls>
+        <Title>LEGOFY your images or webcam!</Title>
+
+        <label >Number of LEGO pieces {numberOfLego}</label>
+        <input type="range" value={numberOfLego} onChange={e => setNumberOfLego(e?.target?.value ? Number(e.target.value) : 0)}
+          min="2" max="200" />
+        <Row>       
+          <Switch
+          checked={usingWebcam}
+          onChange={() => {
+            setUsingWebCam(!usingWebcam)
+            usingWebcamGlobal = !usingWebcam
+          }}
+        />
+        <p style={{marginLeft: 10}}>Use webcamera</p>
+        </Row>
+
+
+        <DropContainer {...getRootProps()}>
+          <input {...getInputProps()} />
+          {
+            isDragActive ?
+              <p>Drop the files here ...</p> :
+              <p>Drag 'n' drop some files here, or click to select files</p>
+          }
+        </DropContainer>
+      </Controls>
     </Container>
   )
 }
