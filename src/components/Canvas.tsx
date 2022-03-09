@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
 import { lab, LabColor } from 'd3-color'
 import { initiateVideo } from '../utils/video'
@@ -6,6 +6,7 @@ import Title from './Title'
 // @ts-expect-error
 import Switch from 'react-ios-switch'
 import { useDropzone } from 'react-dropzone'
+import Button from './Button'
 
 interface Lab {
   l: number
@@ -47,8 +48,12 @@ const Controls = styled.div`
 
 const DropContainer = styled.div`
   padding: 20px;
-  background-color: #ccc;
+  background-color: #ddd;
   margin: 20px 0;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 `
 
 const Row = styled.div`
@@ -326,6 +331,18 @@ const Canvas: React.FC = () => {
     }
   }, [colorLimit])
 
+  function saveImage() {
+    const canvas = paintingEl?.current
+
+    if (canvas) {
+      const image = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream")
+      const link = document.createElement('a')
+      link.setAttribute('download', 'LEGO.png')
+      link.setAttribute('href', image)
+      link.click()
+    }
+  }
+
   return (
     <Container>
       <PaintingsContainer>
@@ -364,6 +381,7 @@ const Canvas: React.FC = () => {
               <p>Drag 'n' drop some files here, or click to select files</p>
           }
         </DropContainer>
+        <Button onClick={saveImage}>Save image</Button>
       </Controls>
     </Container>
   )
